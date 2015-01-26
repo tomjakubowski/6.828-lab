@@ -1,5 +1,9 @@
 <!-- vim: set ft=markdown : -->
 
+# Selected exercise answers:
+
+## Lab 1:
+
 ### Exercise 8:
 
 1. `console.c` exports `cputchar`, which `printf` uses to actually print
@@ -40,3 +44,18 @@
    would change such that arguments referenced in the format string should be
    passed in reverse order, or it would need to somehow reverse the `va_list`
    after creating it.
+
+### Exercise 9:
+
+The kernel sets the stack pointer in `entry.S`, just before jumping into
+`i386_init`.  The stack is located at `0xf010b000` and the kernel reserves
+eight pages or 32 kilobytes.  The stack pointer is initialized to the "top" end
+of the reserved area (the stack grows below it).
+
+### Exercise 10:
+
+Each recursive call of `test_backtrace` pushes 4 32-bit words on the stack.  First
+the argument to `test_backtrace` is pushed.  Then the `call` instruction pushes
+the address of the next execution.  The prologue of `test_backtrace` then pushes
+`%ebp`, the caller's base pointer, and pushes `%ebx` to save its value to the stack
+(since the function body will clobber its value).
