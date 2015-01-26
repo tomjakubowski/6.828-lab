@@ -1,0 +1,42 @@
+<!-- vim: set ft=markdown : -->
+
+### Exercise 8:
+
+1. `console.c` exports `cputchar`, which `printf` uses to actually print
+   characters to the console.
+
+2. This code handles scrolling the display. If the cursor's position is past
+   the size of the display, it copies each row of the buffer into the preceding
+   row, blanks out the last row on the screen, and moves the cursor position back
+   one row (hopefully somewhere on the last row of the display, if the rest of
+   the code is correct).
+
+3. Ok:
+  1. `fmt` points to the format string. `ap` points to the value `0x1`.
+  2. Elided
+
+4. The output is `He11o World`.  First, the character `'H'` is printed.  Then
+   the first argument `57616` is printed as a hex literal, `e110`.  Next the
+   characters `' '`, `'W'`, and `'o'` are printed.  Now, the trick: vcprintf
+   will interpret the next value in the `va_list` as a string.  The next value
+   is pointer to the word `0x00646c72`.  Since the platform is little-endian,
+   reading this byte-by-byte by advancing a pointer -- as strings are read --
+   will proceed from the rightmost byte to leftmost.  Namely, it will read and
+   print the characters `0x72`, `0x6c`, `0x64`, and terminating at the null
+   char `0x00` which is the leftmost byte of the word.
+
+   On a big-endian platform, the word stored in `i` would be read left to
+   right, so the value would need to be `0x726c6400` to see the same behavior.
+   The immediate `57616` value would not need to be changed, since unlike the
+   string-printing code operating on the `i` value, the `printnum` function
+   never operates directly on the individual bytes of its `num` argument.
+
+5. It will likely print the `int` value at some arbitrary memory address,
+   depending on the behavior of `va_arg` when there are no more arguments in
+   the `va_list` (which is undefined).
+
+6. Presumably, `va_arg` in this hypothetical would pop off variadic arguments
+   from last-to-first instead of in declaration order. So either the interface
+   would change such that arguments referenced in the format string should be
+   passed in reverse order, or it would need to somehow reverse the `va_list`
+   after creating it.
