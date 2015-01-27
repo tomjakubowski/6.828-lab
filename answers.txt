@@ -64,3 +64,33 @@ the address of the next execution.  The prologue of `test_backtrace` then pushes
 
 We could detect how many arguments are passed to the function by examining the
 function's stab.  This might be problemtaic with variadic functions though.
+
+```diff
+diff --git a/kern/monitor.c b/kern/monitor.c
+index ccc10ef..fde787f 100644
+--- a/kern/monitor.c
++++ b/kern/monitor.c
+@@ -66,12 +66,18 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
+ 		uint32_t *args = &ebp[2];
+ 		int i = 0;
+
+-		cprintf("  ebp %08x  eip %08x  args %08x %08x %08x %08x %08x\n",
+-				ebp, eip,
+-				args[0], args[1], args[2], args[3], args[4]);
+-
+ 		struct Eipdebuginfo info;
+ 		debuginfo_eip(eip, &info);
++
++		cprintf("  ebp %08x  eip %08x", ebp, eip);
++
++		if (info.eip_fn_narg > 0)
++			cprintf("  args");
++
++		for (i = 0; i < info.eip_fn_narg; ++i)
++			cprintf(" %08x", args[i]);
++		cputchar('\n');
++
+ 		cprintf("         %s:%d: %.*s+%d\n",
+ 				info.eip_file, info.eip_line,
+ 				info.eip_fn_namelen, info.eip_fn_name,
+```
