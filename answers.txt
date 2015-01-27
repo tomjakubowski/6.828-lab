@@ -1,0 +1,96 @@
+<!-- vim: set ft=markdown : -->
+
+# Selected exercise answers:
+
+## Lab 1:
+
+### Exercise 8:
+
+1. `console.c` exports `cputchar`, which `printf` uses to actually print
+   characters to the console.
+
+2. This code handles scrolling the display. If the cursor's position is past
+   the size of the display, it copies each row of the buffer into the preceding
+   row, blanks out the last row on the screen, and moves the cursor position back
+   one row (hopefully somewhere on the last row of the display, if the rest of
+   the code is correct).
+
+3. Ok:
+  1. `fmt` points to the format string. `ap` points to the value `0x1`.
+  2. Elided
+
+4. The output is `He11o World`.  First, the character `'H'` is printed.  Then
+   the first argument `57616` is printed as a hex literal, `e110`.  Next the
+   characters `' '`, `'W'`, and `'o'` are printed.  Now, the trick: vcprintf
+   will interpret the next value in the `va_list` as a string.  The next value
+   is pointer to the word `0x00646c72`.  Since the platform is little-endian,
+   reading this byte-by-byte by advancing a pointer -- as strings are read --
+   will proceed from the rightmost byte to leftmost.  Namely, it will read and
+   print the characters `0x72`, `0x6c`, `0x64`, and terminating at the null
+   char `0x00` which is the leftmost byte of the word.
+
+   On a big-endian platform, the word stored in `i` would be read left to
+   right, so the value would need to be `0x726c6400` to see the same behavior.
+   The immediate `57616` value would not need to be changed, since unlike the
+   string-printing code operating on the `i` value, the `printnum` function
+   never operates directly on the individual bytes of its `num` argument.
+
+5. It will likely print the `int` value at some arbitrary memory address,
+   depending on the behavior of `va_arg` when there are no more arguments in
+   the `va_list` (which is undefined).
+
+6. Presumably, `va_arg` in this hypothetical would pop off variadic arguments
+   from last-to-first instead of in declaration order. So either the interface
+   would change such that arguments referenced in the format string should be
+   passed in reverse order, or it would need to somehow reverse the `va_list`
+   after creating it.
+
+### Exercise 9:
+
+The kernel sets the stack pointer in `entry.S`, just before jumping into
+`i386_init`.  The stack is located at `0xf0110000` and the kernel reserves
+eight pages or 32 kilobytes.  The stack pointer is initialized to the "top" end
+of the reserved area (the stack grows below it).
+
+### Exercise 10:
+
+Each recursive call of `test_backtrace` pushes 4 32-bit words on the stack.  First
+the argument to `test_backtrace` is pushed.  Then the `call` instruction pushes
+the address of the next execution.  The prologue of `test_backtrace` then pushes
+`%ebp`, the caller's base pointer, and pushes `%ebx` to save its value to the stack
+(since the function body will clobber its value).
+
+## Exercise 11 (notes):
+
+We could detect how many arguments are passed to the function by examining the
+function's stab.  This might be problemtaic with variadic functions though.
+
+```diff
+diff --git a/kern/monitor.c b/kern/monitor.c
+index ccc10ef..fde787f 100644
+--- a/kern/monitor.c
++++ b/kern/monitor.c
+@@ -66,12 +66,18 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
+ 		uint32_t *args = &ebp[2];
+ 		int i = 0;
+
+-		cprintf("  ebp %08x  eip %08x  args %08x %08x %08x %08x %08x\n",
+-				ebp, eip,
+-				args[0], args[1], args[2], args[3], args[4]);
+-
+ 		struct Eipdebuginfo info;
+ 		debuginfo_eip(eip, &info);
++
++		cprintf("  ebp %08x  eip %08x", ebp, eip);
++
++		if (info.eip_fn_narg > 0)
++			cprintf("  args");
++
++		for (i = 0; i < info.eip_fn_narg; ++i)
++			cprintf(" %08x", args[i]);
++		cputchar('\n');
++
+ 		cprintf("         %s:%d: %.*s+%d\n",
+ 				info.eip_file, info.eip_line,
+ 				info.eip_fn_namelen, info.eip_fn_name,
+```
