@@ -48,7 +48,7 @@
 ### Exercise 9:
 
 The kernel sets the stack pointer in `entry.S`, just before jumping into
-`i386_init`.  The stack is located at `0xf010b000` and the kernel reserves
+`i386_init`.  The stack is located at `0xf0110000` and the kernel reserves
 eight pages or 32 kilobytes.  The stack pointer is initialized to the "top" end
 of the reserved area (the stack grows below it).
 
