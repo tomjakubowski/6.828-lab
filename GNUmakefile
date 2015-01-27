@@ -90,7 +90,7 @@ PERL	:= perl
 # Only optimize to -O1 to discourage inlining, which complicates backtraces.
 CFLAGS := $(CFLAGS) $(DEFS) $(LABDEFS) -O1 -fno-builtin -I$(TOP) -MD
 CFLAGS += -fno-omit-frame-pointer
-CFLAGS += -Wall -Wno-format -Wno-unused -Werror -ggdb -m32
+CFLAGS += -Wall -Wno-format -Wno-unused -Werror -gstabs -m32
 
 # Add -fno-stack-protector if the option exists.
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
@@ -120,8 +120,8 @@ all:
 	   $(OBJDIR)/lib/%.o $(OBJDIR)/fs/%.o $(OBJDIR)/net/%.o \
 	   $(OBJDIR)/user/%.o
 
-KERN_CFLAGS := $(CFLAGS) -DJOS_KERNEL -ggdb
-USER_CFLAGS := $(CFLAGS) -DJOS_USER -ggdb
+KERN_CFLAGS := $(CFLAGS) -DJOS_KERNEL -gstabs
+USER_CFLAGS := $(CFLAGS) -DJOS_USER -gstabs
 
 # Update .vars.X if variable X has changed since the last make run.
 #

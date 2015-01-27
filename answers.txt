@@ -59,3 +59,8 @@ the argument to `test_backtrace` is pushed.  Then the `call` instruction pushes
 the address of the next execution.  The prologue of `test_backtrace` then pushes
 `%ebp`, the caller's base pointer, and pushes `%ebx` to save its value to the stack
 (since the function body will clobber its value).
+
+## Exercise 11 (notes):
+
+We could detect how many arguments are passed to the function by examining the
+function's stab.  This might be problemtaic with variadic functions though.
