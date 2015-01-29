@@ -96,10 +96,25 @@ boot_alloc(uint32_t n)
 	// Allocate a chunk large enough to hold 'n' bytes, then update
 	// nextfree.  Make sure nextfree is kept aligned
 	// to a multiple of PGSIZE.
-	//
-	// LAB 2: Your code here.
 
-	return NULL;
+	// Return the first previously unreserved address:
+	result = nextfree;
+
+	// Measure out enough pages to hold the bytes requested, then convert that
+	// to a memory address offset.
+	uintptr_t offset = ROUNDUP(n, PGSIZE);
+	nextfree += offset;
+
+	if ((uintptr_t) nextfree > (KERNBASE + npages*PGSIZE))
+		panic("out of memory (past memory bounds)");
+	if (nextfree < result)
+		panic("out of memory (overflow)");
+
+	// Sanity checks...
+	assert((uintptr_t) result % PGSIZE == 0);
+	assert((uintptr_t) nextfree % PGSIZE == 0);
+
+	return result;
 }
 
 // Set up a two-level page table:
@@ -120,13 +135,12 @@ mem_init(void)
 	// Find out how much memory the machine has (npages & npages_basemem).
 	i386_detect_memory();
 
-	// Remove this line when you're ready to test this function.
-	panic("mem_init: This function is not finished\n");
-
 	//////////////////////////////////////////////////////////////////////
 	// create initial page directory.
 	kern_pgdir = (pde_t *) boot_alloc(PGSIZE);
 	memset(kern_pgdir, 0, PGSIZE);
+
+	cprintf("kern_pgdir %08x\n", kern_pgdir);
 
 	//////////////////////////////////////////////////////////////////////
 	// Recursively insert PD in itself as a page table, to form
@@ -142,8 +156,9 @@ mem_init(void)
 	// The kernel uses this array to keep track of physical pages: for
 	// each physical page, there is a corresponding struct PageInfo in this
 	// array.  'npages' is the number of physical pages in memory.
-	// Your code goes here:
 
+	pages = (struct PageInfo *) boot_alloc(sizeof(struct PageInfo) * npages);
+	cprintf("pages %08x\n", pages);
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
@@ -247,7 +262,27 @@ page_init(void)
 	// NB: DO NOT actually touch the physical memory corresponding to
 	// free pages!
 	size_t i;
-	for (i = 0; i < npages; i++) {
+
+	pages[0].pp_ref = 1;
+	pages[0].pp_link = NULL;
+
+	for (i = 1; i < npages_basemem; i++) {
+		pages[i].pp_ref = 0;
+		pages[i].pp_link = page_free_list;
+		page_free_list = &pages[i];
+	}
+
+	// Mark pages in extended memory up to the first page not yet allocated by
+	// the kernel as used.  This should include any pages in the "IO hole".
+	size_t nextfree = ((size_t) boot_alloc(0) - KERNBASE) / PGSIZE;
+	cprintf("nextfree is %08x", nextfree);
+	for (i = npages_basemem; i < nextfree; i++) {
+		pages[i].pp_ref = 1;
+		pages[i].pp_link = NULL;
+	}
+
+	// Mark the remaining pages as free.
+	for (i = nextfree; i < npages; i++) {
 		pages[i].pp_ref = 0;
 		pages[i].pp_link = page_free_list;
 		page_free_list = &pages[i];
