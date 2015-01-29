@@ -275,7 +275,6 @@ page_init(void)
 	// Mark pages in extended memory up to the first page not yet allocated by
 	// the kernel as used.  This should include any pages in the "IO hole".
 	size_t nextfree = ((size_t) boot_alloc(0) - KERNBASE) / PGSIZE;
-	cprintf("nextfree is %08x", nextfree);
 	for (i = npages_basemem; i < nextfree; i++) {
 		pages[i].pp_ref = 1;
 		pages[i].pp_link = NULL;
