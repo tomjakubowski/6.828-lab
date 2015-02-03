@@ -148,7 +148,7 @@ QEMUOPTS += $(QEMUEXTRA)
 	sed "s/localhost:1234/localhost:$(GDBPORT)/" < $^ > $@
 
 gdb: .gdbrc
-	cgdb -x .gdbrc
+	gdb -x .gdbrc
 
 pre-qemu: .gdbrc
 
