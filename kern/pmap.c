@@ -216,7 +216,6 @@ mem_init(void)
 			ROUNDUP(~0x0 - KERNBASE, PGSIZE),
 			0x0, PTE_W);
 
-
 	// Check that the initial page directory has been set up correctly.
 	check_kern_pgdir();
 

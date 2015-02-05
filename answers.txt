@@ -101,3 +101,78 @@ index ccc10ef..fde787f 100644
 
 The type of `x` should be `uintptr_t`; since `value` is dereferenced it must
 correspond to a virtual address.
+
+### Question 2.
+
++--------+------------+-------------------------------------------------------------+
+| Entry  | Base vaddr | Points to (logically)                                       |
++--------+------------+-------------------------------------------------------------+
+|  1023  | 0xffc00000 | Page table for top 4MiB of physical memory                  |
+|  ...   |     ..     |                                                             |
+|   961  | 0xf0400000 | Page table for [4MiB, 8MiB)                                 |
+|   960  | 0xf0000000 | Page table for [0MiB, 4MiB) of physical mem                 |
+|   959  | 0xef800000 | Page table for kernel stack + guard page (unmapped)         |
+|   958  | 0xef800000 | Not mapped                                                  |
+|   957  | 0xef400000 | User virtual page table (read-only mapping of `kern_pgdir`) |
+|   956  | 0xef000000 | Read-only user mapping of `pages` structure                 |
+|  ...   |     ..     |                                                             |
+|     0  | 0x00000000 | Not mapped                                                  |
++--------+------------+-------------------------------------------------------------+
+
+### Question 3.
+
+Pages mapped for the kernel's use can't be read or written by user
+programs because the `PTE_U` flag is not set in their PTEs.
+Specifically, kernel memory is protected by the x86 architecture's
+"current privilege level" (CPL) mechanism.  When the CPL is 3, trying
+to read memory through a PDE or PTE without `PTE_U` set triggers a
+fault.  When the CPL is 0, it can freely access memory whether `PTE_U`
+is set or not.  By running kernel instructions with CPL 0, and user
+instructions with CPL 3, the kernel's memory can be protected from
+reads by user programs.
+
+A similar mechanism allows the kernel to protect pages from writes
+issued by user programs, using the `PTE_W` flag.  When the CPL is 3,
+trying to write memory through a PDE or PTE without `PTE_W` set
+triggers a fault.
+
+### Question 4
+
+The operating system can support up to 256 MB of physical memory.  The
+kernel maps virtual addresses `[KERNBASE, 2^32)` to physical addresses
+`[0, 2^32 - KERNBASE)`, the intention being to map all of physical
+memory with this mapping: `2^32 - KERNBASE` is precisely 256 MB.
+
+### Question 5
+
+The memory overhead of mapping 256 MB of physical memory is 768 KB.
+
+Assuming 4KB pages, `npages` is 2^16 meaning the `pages` array
+takes up 2^16 * 8 bytes = 512 KB of memory.
+
+Mapping all pages of physical memory at `KERNBASE` requires 2^16 * 4
+bytes = 256 KB of memory for page tables.
+
+(The kernel page directory uses another page of memory, which we won't
+count since that's fixed no matter how much physical memory is
+available up to the 32-bit addressing limit).
+
+### Question 6
+
+Code starts executing at a "high" EIP at the `call i386_init`
+instruction, which jumps to an address the linker placedabove
+`KERNBASE`.  In `entrypgdir.c`, a static, basic page table
+`entry_pgtable` is set up.  `entry_pgtable` maps entry 0 to physical
+page 0, entry 1 to physical page 1, entry 2 to physical page 2, and so
+on.  `entrypgdir.c` also configures the entry code's page directory,
+`entry_pgdir`, with two entries: the first at offset 0 which points to
+`entry_pgtable`, and the second at offset `KERNBASE >> 22` which also
+points to `entry_pgtable`.  Just before the jump to `i386_init`,
+`entry_pgdir` is loaded into the `cr3` register and paging is enabled.
+
+The effect of this page directory/table setup is that the linear
+addresses `[0, 4MB)` and `[KERNBASE, KERNBASE+4MB)` are *both* mapped
+to the first page of physical memory.  This allows the instructions in
+`entry.S` just before the `relocated label`, which were loaded by the
+boot loader into the first page of physical memory, to run without a
+hitch after enabling paging, before jumping above `KERNBASE`.
