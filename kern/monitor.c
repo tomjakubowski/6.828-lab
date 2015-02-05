@@ -10,6 +10,7 @@
 #include <kern/console.h>
 #include <kern/monitor.h>
 #include <kern/kdebug.h>
+#include <kern/pmap.h>
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
@@ -24,7 +25,8 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
-	{ "backtrace", "Display a backtrace", mon_backtrace }
+	{ "backtrace", "Display a backtrace", mon_backtrace },
+	{ "showmappings", "Show physical page mappings", mon_showmappings }
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
@@ -81,7 +83,73 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 	return 0;
 }
 
+// Given a string containing a hexadecimal address like "0xdeadbeef",
+// parseaddr parses it into a number and places it in the out
+// parameter.  Returns 0 on success and -1 on error.
+static int
+parseaddr(const char *argv, uintptr_t *out)
+{
+	static char digits[] = "0123456789abcdef";
 
+	if (*argv++ != '0' || *argv++ != 'x')
+		return -1;
+	uintptr_t n = 1, res = 0;
+	const char *cur = argv + strlen(argv);
+	if (cur - argv > 8)
+		return -1;
+	while (cur-- > argv) {
+		char *needle = strchr(digits, *cur);
+		if (!needle && *cur >= 'A' && *cur <= 'F')
+			needle = strchr(digits, *cur + 0x20);
+		else if (!needle)
+			return -1;
+		res += (n * (needle - digits));
+		n *= 16;
+	}
+	*out = res;
+	return 0;
+}
+
+int
+mon_showmappings(int argc, char **argv, struct Trapframe *tf)
+{
+	if (argc != 3) {
+		cprintf("usage: %s START END\n", argv[0]);
+		return 0;
+	}
+	uintptr_t addrs[2];
+	size_t i;
+	for (i = 0; i < 2; i++) {
+		if (parseaddr(argv[i+1], &addrs[i]) == -1) {
+			cprintf("error: couldn't parse '%s' as address.  ex: 0x1000\n", argv[i]);
+			return 0;
+		}
+		if (addrs[i] % PGSIZE) {
+			cprintf("error: 0x%08x must be page aligned.\n", addrs[i]);
+			return 0;
+		}
+	}
+	pde_t *pgdir = (pde_t *) (KERNBASE + rcr3());
+	cprintf("Mappings on virtual addresses [0x%08x, 0x%08x):\n", addrs[0], addrs[1]);
+	// Hint: to get the mapping for 0xfffff000, use `showmappings 0xfffff000 0x0`.
+	for (i = addrs[0]; i != addrs[1]; i += PGSIZE) {
+		cprintf("  0x%08x ", i);
+		pte_t *pte = pgdir_walk(pgdir, (const void *) i, false);
+		if (pte && (*pte & PTE_P)) {
+			physaddr_t paddr = PTE_ADDR(*pte);
+			cprintf("-> 0x%08x ", paddr);
+		} else {
+			cprintf("(unmapped)\n");
+			continue;
+		}
+		if (*pte & PTE_W)
+			cprintf("W");
+		if (*pte & PTE_U)
+			cprintf("U");
+		cprintf("\n");
+	}
+	return 0;
+}
 
 /***** Kernel monitor command interpreter *****/
 
@@ -134,7 +202,6 @@ monitor(struct Trapframe *tf)
 
 	cprintf("Welcome to the JOS kernel monitor!\n");
 	cprintf("Type 'help' for a list of commands.\n");
-
 
 	while (1) {
 		buf = readline("K> ");
