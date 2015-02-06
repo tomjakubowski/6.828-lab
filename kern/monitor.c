@@ -26,7 +26,8 @@ static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
 	{ "backtrace", "Display a backtrace", mon_backtrace },
-	{ "showmappings", "Show physical page mappings", mon_showmappings }
+	{ "showmappings", "Show physical page mappings", mon_showmappings },
+	{ "perm", "Adjust permissions on a page.", mon_perm }
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
@@ -110,6 +111,15 @@ parseaddr(const char *argv, uintptr_t *out)
 	return 0;
 }
 
+static void
+print_perms(pte_t pte)
+{
+	if (pte & PTE_W)
+		cprintf("W");
+	if (pte & PTE_U)
+		cprintf("U");
+}
+
 int
 mon_showmappings(int argc, char **argv, struct Trapframe *tf)
 {
@@ -142,12 +152,79 @@ mon_showmappings(int argc, char **argv, struct Trapframe *tf)
 			cprintf("(unmapped)\n");
 			continue;
 		}
-		if (*pte & PTE_W)
-			cprintf("W");
-		if (*pte & PTE_U)
-			cprintf("U");
+		print_perms(*pte);
 		cprintf("\n");
 	}
+	return 0;
+}
+
+// Returns '|' to "OR" the PTE with the value placed into out.  Returns
+// '&' to "AND" with the value placed into out.  Returns 0 on parse
+// error.
+static char
+parse_perm_adjust(const char *arg, pte_t *out)
+{
+	char oper = 0;
+	pte_t mask = 0;
+	switch (*arg) {
+	case '+':
+		oper = '|';
+		break;
+	case '-':
+		oper = '&';
+		break;
+	default:
+		return 0;
+	}
+	++arg;
+	if (!arg[0] || arg[1])
+		return 0;
+	switch (*arg) {
+	case 'W':
+		mask |= PTE_W;
+		break;
+	case 'U':
+		mask |= PTE_U;
+		break;
+	default:
+		return 0;
+	}
+	if (oper == '&')
+		mask ^= ~0x0;
+	*out = mask;
+	return oper;
+}
+
+int
+mon_perm(int argc, char **argv, struct Trapframe *tf)
+{
+	uintptr_t addr;
+	pte_t mask;
+	char adjust;
+	if (argc != 3 || parseaddr(argv[1], &addr) || !(adjust = parse_perm_adjust(argv[2], &mask))) {
+		cprintf("usage: %s ADDR [+-][WU]\n", argv[0]);
+		return 0;
+	}
+	pde_t *pgdir = (pde_t *) (KERNBASE + rcr3());
+	pte_t *pte = pgdir_walk(pgdir, (void *) addr, false);
+	if (!pte || !(*pte & PTE_P)) {
+		cprintf("0x%08x is unmapped.\n");
+		return 0;
+	}
+	switch (adjust) {
+	case '&':
+		*pte &= mask;
+		break;
+	case '|':
+		*pte |= mask;
+		break;
+	default:
+		panic("shouldn't happen");
+		return 0;
+	}
+	cprintf("Set permissions on 0x%08x to: ");
+	print_perms(*pte);
+	cprintf("\n");
 	return 0;
 }
 
